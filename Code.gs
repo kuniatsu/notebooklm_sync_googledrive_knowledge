@@ -6,12 +6,14 @@
 // ============================================================
 
 // 【必須】監視対象フォルダのID
-const SOURCE_FOLDER_ID = 'ここにフォルダIDを貼り付けます';
+const SOURCE_FOLDER_ID = '1wyv8VKTKaQX2PkVOXQuwS0H9vo9ybO_f';
 
-// 【任意】出力フォルダ名、退避フォルダ名、ログファイル名
-const OUTPUT_FOLDER_NAME = 'NotebookLM';
-const PROCESSED_FOLDER_NAME = 'Processed';
+// 【任意】出力フォルダ名、ログファイル名
+const OUTPUT_FOLDER_NAME = 'NoteBookLM';
 const LOG_FILE_NAME = '同期ログ';
+
+// 処理済みファイルを記録するスクリプトプロパティのキー
+const PROCESSED_KEY = 'processedFileIds';
 
 // ============================================================
 // メイン関数: トリガーから呼び出される
@@ -19,7 +21,9 @@ const LOG_FILE_NAME = '同期ログ';
 function autoSyncToNotebookLM() {
   const sourceFolder = DriveApp.getFolderById(SOURCE_FOLDER_ID);
   const outputFolder = getOrCreateSubFolder(sourceFolder, OUTPUT_FOLDER_NAME);
-  const processedFolder = getOrCreateSubFolder(sourceFolder, PROCESSED_FOLDER_NAME);
+
+  // 処理済みファイルIDの一覧を取得
+  const processedIds = getProcessedIds();
 
   const logEntries = [];
 
@@ -27,10 +31,12 @@ function autoSyncToNotebookLM() {
   const pdfFiles = sourceFolder.getFilesByType(MimeType.PDF);
   while (pdfFiles.hasNext()) {
     const file = pdfFiles.next();
+    if (processedIds[file.getId()]) continue; // 処理済みならスキップ
+
     try {
       const result = processFile(file, outputFolder, 'pdf');
       logEntries.push(result);
-      file.moveTo(processedFolder);
+      processedIds[file.getId()] = true;
     } catch (e) {
       Logger.log('PDF処理エラー: ' + file.getName() + ' - ' + e.message);
       logEntries.push({
@@ -47,11 +53,12 @@ function autoSyncToNotebookLM() {
     const file = allFiles.next();
     const name = file.getName();
     if (!name.toLowerCase().endsWith('.md')) continue;
+    if (processedIds[file.getId()]) continue; // 処理済みならスキップ
 
     try {
       const result = processFile(file, outputFolder, 'md');
       logEntries.push(result);
-      file.moveTo(processedFolder);
+      processedIds[file.getId()] = true;
     } catch (e) {
       Logger.log('Markdown処理エラー: ' + name + ' - ' + e.message);
       logEntries.push({
@@ -62,10 +69,31 @@ function autoSyncToNotebookLM() {
     }
   }
 
+  // 処理済みIDを保存
+  saveProcessedIds(processedIds);
+
   // 処理があった場合のみログを更新
   if (logEntries.length > 0) {
     updateSyncLog(outputFolder, logEntries);
   }
+}
+
+// ============================================================
+// 処理済みファイルID管理 (ScriptProperties)
+// ============================================================
+function getProcessedIds() {
+  const json = PropertiesService.getScriptProperties().getProperty(PROCESSED_KEY);
+  return json ? JSON.parse(json) : {};
+}
+
+function saveProcessedIds(ids) {
+  PropertiesService.getScriptProperties().setProperty(PROCESSED_KEY, JSON.stringify(ids));
+}
+
+// 処理済みリストをリセットする（再処理したい場合に手動実行）
+function resetProcessedIds() {
+  PropertiesService.getScriptProperties().deleteProperty(PROCESSED_KEY);
+  Logger.log('処理済みリストをリセットしました。次回実行時にすべてのファイルが再処理されます。');
 }
 
 // ============================================================
