@@ -6,7 +6,7 @@
 // ============================================================
 
 // 【必須】監視対象フォルダのID
-const SOURCE_FOLDER_ID = '1wyv8VKTKaQX2PkVOXQuwS0H9vo9ybO_f';
+const SOURCE_FOLDER_ID = 'フォルダのID';
 
 // 【任意】出力フォルダ名、ログファイル名
 const OUTPUT_FOLDER_NAME = 'NoteBookLM';
