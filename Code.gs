@@ -15,6 +15,9 @@ const LOG_FILE_NAME = '同期ログ';
 // 処理済みファイルを記録するスクリプトプロパティのキー
 const PROCESSED_KEY = 'processedFileIds';
 
+// 1回の実行で処理するファイル数の上限
+const MAX_FILES_PER_RUN = 100;
+
 // ============================================================
 // メイン関数: トリガーから呼び出される
 // ============================================================
@@ -26,10 +29,11 @@ function autoSyncToNotebookLM() {
   const processedIds = getProcessedIds();
 
   const logEntries = [];
+  let processedCount = 0;
 
   // PDF ファイルの処理
   const pdfFiles = sourceFolder.getFilesByType(MimeType.PDF);
-  while (pdfFiles.hasNext()) {
+  while (pdfFiles.hasNext() && processedCount < MAX_FILES_PER_RUN) {
     const file = pdfFiles.next();
     if (processedIds[file.getId()]) continue; // 処理済みならスキップ
 
@@ -37,6 +41,7 @@ function autoSyncToNotebookLM() {
       const result = processFile(file, outputFolder, 'pdf');
       logEntries.push(result);
       processedIds[file.getId()] = true;
+      processedCount++;
     } catch (e) {
       Logger.log('PDF処理エラー: ' + file.getName() + ' - ' + e.message);
       logEntries.push({
@@ -44,12 +49,13 @@ function autoSyncToNotebookLM() {
         action: 'エラー',
         detail: e.message
       });
+      processedCount++;
     }
   }
 
   // Markdown ファイルの処理
   const allFiles = sourceFolder.getFiles();
-  while (allFiles.hasNext()) {
+  while (allFiles.hasNext() && processedCount < MAX_FILES_PER_RUN) {
     const file = allFiles.next();
     const name = file.getName();
     if (!name.toLowerCase().endsWith('.md')) continue;
@@ -59,6 +65,7 @@ function autoSyncToNotebookLM() {
       const result = processFile(file, outputFolder, 'md');
       logEntries.push(result);
       processedIds[file.getId()] = true;
+      processedCount++;
     } catch (e) {
       Logger.log('Markdown処理エラー: ' + name + ' - ' + e.message);
       logEntries.push({
@@ -66,7 +73,12 @@ function autoSyncToNotebookLM() {
         action: 'エラー',
         detail: e.message
       });
+      processedCount++;
     }
+  }
+
+  if (processedCount >= MAX_FILES_PER_RUN) {
+    Logger.log('上限の ' + MAX_FILES_PER_RUN + ' ファイルを処理しました。残りのファイルは次回の実行で処理されます。');
   }
 
   // 処理済みIDを保存
